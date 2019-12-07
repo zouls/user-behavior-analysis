@@ -9,6 +9,7 @@
     <version>1.0</version>
     <modules>
         <module>hot-items</module>
+        <module>network-flow</module>
     </modules>
     <packaging>pom</packaging>
 
