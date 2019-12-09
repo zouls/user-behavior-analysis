@@ -16,7 +16,6 @@ import org.apache.flink.util.Collector
 
 import scala.collection.mutable.ListBuffer
 
-
 case class ApacheLogEvent(ip: String, userId: String, eventTime: Long, method: String, url: String)
 
 case class UrlViewCount(url: String, windowEnd: Long, count: Long)
@@ -85,18 +84,25 @@ class UrlWindow() extends WindowFunction[Long, UrlViewCount, String, TimeWindow]
 
 class UrlTopN(topSize: Int) extends KeyedProcessFunction[Long, UrlViewCount, String] {
   // 不用open,用lazy,另外一种实现方式
-  lazy val stateList: ListState[UrlViewCount] = getRuntimeContext.getListState(new ListStateDescriptor[UrlViewCount]("url-state", classOf[UrlViewCount]))
+  lazy val stateList: ListState[UrlViewCount] = getRuntimeContext.getListState(
+    new ListStateDescriptor[UrlViewCount]("url-state", classOf[UrlViewCount])
+  )
 
   //  override def open(parameters: Configuration): Unit = {
   //    stateList = getRuntimeContext.getListState(new ListStateDescriptor[UrlViewCount]("url-state", classOf[UrlViewCount]))
   //  }
 
-  override def processElement(value: UrlViewCount, ctx: KeyedProcessFunction[Long, UrlViewCount, String]#Context, out: Collector[String]): Unit = {
+  override def processElement(value: UrlViewCount,
+                              ctx: KeyedProcessFunction[Long, UrlViewCount, String]#Context,
+                              out: Collector[String]): Unit = {
     stateList.add(value)
     ctx.timerService().registerEventTimeTimer(value.windowEnd + 1)
   }
 
-  override def onTimer(timestamp: Long, ctx: KeyedProcessFunction[Long, UrlViewCount, String]#OnTimerContext, out: Collector[String]): Unit = {
+  override def onTimer(timestamp: Long,
+                       ctx: KeyedProcessFunction[Long, UrlViewCount, String]#OnTimerContext,
+                       out: Collector[String]): Unit = {
+
     var list: ListBuffer[UrlViewCount] = new ListBuffer
     //    import scala.collection.JavaConversions._
     val itr = stateList.get().iterator()
