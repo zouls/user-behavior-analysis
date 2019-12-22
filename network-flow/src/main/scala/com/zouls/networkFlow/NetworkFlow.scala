@@ -1,27 +1,15 @@
 package com.zouls.networkFlow
 
-import java.sql.Timestamp
 import java.text.SimpleDateFormat
 
-import org.apache.flink.api.common.functions.AggregateFunction
-import org.apache.flink.api.common.state.{ListState, ListStateDescriptor}
 import org.apache.flink.streaming.api.TimeCharacteristic
-import org.apache.flink.streaming.api.functions.KeyedProcessFunction
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor
 import org.apache.flink.streaming.api.scala._
-import org.apache.flink.streaming.api.scala.function.WindowFunction
 import org.apache.flink.streaming.api.windowing.time.Time
-import org.apache.flink.streaming.api.windowing.windows.TimeWindow
-import org.apache.flink.util.Collector
 
-import scala.collection.mutable.ListBuffer
-
-case class ApacheLogEvent(ip: String, userId: String, eventTime: Long, method: String, url: String)
-
-case class UrlViewCount(url: String, windowEnd: Long, count: Long)
 
 /**
- * 热门页面统计
+ * 热门页面统计,获取前TOP N个
  */
 object NetworkFlow {
   def main(args: Array[String]): Unit = {
@@ -63,72 +51,5 @@ object NetworkFlow {
     processedStream.print()
 
     env.execute("NetworkFlow")
-  }
-}
-
-class UrlCount() extends AggregateFunction[ApacheLogEvent, Long, Long] {
-  override def createAccumulator(): Long = 0L
-
-  override def add(value: ApacheLogEvent, accumulator: Long): Long = accumulator + 1
-
-  override def getResult(accumulator: Long): Long = accumulator
-
-  override def merge(a: Long, b: Long): Long = a + b
-}
-
-class UrlWindow() extends WindowFunction[Long, UrlViewCount, String, TimeWindow] {
-  override def apply(key: String, window: TimeWindow, input: Iterable[Long], out: Collector[UrlViewCount]): Unit = {
-    out.collect(UrlViewCount(key, window.getEnd, input.iterator.next()))
-  }
-}
-
-class UrlTopN(topSize: Int) extends KeyedProcessFunction[Long, UrlViewCount, String] {
-  // 不用open,用lazy,另外一种实现方式
-  lazy val stateList: ListState[UrlViewCount] = getRuntimeContext.getListState(
-    new ListStateDescriptor[UrlViewCount]("url-state", classOf[UrlViewCount])
-  )
-
-  //  override def open(parameters: Configuration): Unit = {
-  //    stateList = getRuntimeContext.getListState(new ListStateDescriptor[UrlViewCount]("url-state", classOf[UrlViewCount]))
-  //  }
-
-  override def processElement(value: UrlViewCount,
-                              ctx: KeyedProcessFunction[Long, UrlViewCount, String]#Context,
-                              out: Collector[String]): Unit = {
-    stateList.add(value)
-    ctx.timerService().registerEventTimeTimer(value.windowEnd + 1)
-  }
-
-  override def onTimer(timestamp: Long,
-                       ctx: KeyedProcessFunction[Long, UrlViewCount, String]#OnTimerContext,
-                       out: Collector[String]): Unit = {
-
-    var list: ListBuffer[UrlViewCount] = new ListBuffer
-    //    import scala.collection.JavaConversions._
-    val itr = stateList.get().iterator()
-    while (itr.hasNext) {
-      list += itr.next()
-    }
-    //    for (entity <- stateList.get()) {
-    //      list += entity
-    //    }
-    stateList.clear()
-
-    val sortedList = list.sortWith(_.count > _.count).take(topSize)
-    //    val sortedList = list.sortBy(_.count)(Ordering.Long.reverse).take(topSize)
-
-    val result: StringBuilder = new StringBuilder
-
-    result.append("时间: ").append(new Timestamp(timestamp - 1)).append("\n")
-    for (i <- sortedList.indices) {
-
-      result
-        .append("No").append(i + 1).append(":")
-        .append(" url=").append(sortedList(i).url)
-        .append(" 访问量=").append(sortedList(i).count).append("\n")
-    }
-    result.append("===============")
-    Thread.sleep(1000L)
-    out.collect(result.toString())
   }
 }

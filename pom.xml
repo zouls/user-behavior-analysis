@@ -11,6 +11,7 @@
         <module>hot-items</module>
         <module>network-flow</module>
         <module>market</module>
+        <module>login-fail-detect</module>
     </modules>
     <packaging>pom</packaging>
 
